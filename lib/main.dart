@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'screens/login_screen.dart';
 import 'screens/admin_dashboard.dart';
 import 'screens/employee_dashboard.dart';
@@ -19,8 +18,6 @@ class MyApp extends StatelessWidget {
       theme: ThemeData(
         primarySwatch: Colors.blue,
         useMaterial3: true,
-        textTheme: GoogleFonts.robotoTextTheme(),
-        fontFamily: GoogleFonts.roboto().fontFamily,
       ),
       initialRoute: '/',
       routes: {

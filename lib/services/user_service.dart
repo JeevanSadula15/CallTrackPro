@@ -4,11 +4,11 @@ class UserService {
   static List<User> _users = [
     User(
       id: 'admin_001',
-      email: 'admin@calltrack.com',
-      password: 'admin123',
+      email: 'admin@callTrackPro.com',
+      password: 'admin',
       role: 'Admin',
       name: 'Admin User',
-      createdAt: DateTime.now().subtract(const Duration(days: 30)),
+      createdAt: DateTime.now(),
     ),
   ];
 

@@ -3,12 +3,13 @@ import '../models/contact.dart';
 import '../models/employee.dart';
 import '../models/user.dart';
 import '../models/student.dart';
-import '../models/call_report.dart';
+
 import '../services/api_service.dart';
 import '../services/user_service.dart';
 import '../services/student_service.dart';
 import '../services/report_service.dart';
 import '../services/auth_service.dart';
+import '../services/excel_service.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:file_picker/file_picker.dart';
 
@@ -29,11 +30,17 @@ class _AdminDashboardState extends State<AdminDashboard> {
   List<Student> _students = [];
   int _selectedIndex = 0;
   String _reportPeriod = 'Daily';
+  Set<String> _selectedStudentIds = {};
 
   @override
   void initState() {
     super.initState();
+    _clearExistingEmployees();
     _loadData();
+  }
+
+  void _clearExistingEmployees() {
+    _employees.removeWhere((emp) => emp.name == 'Jeevan' || emp.name == 'Shridhar');
   }
 
   Future<void> _loadData() async {
@@ -350,6 +357,15 @@ class _AdminDashboardState extends State<AdminDashboard> {
   }
 
   Widget _buildAssignments() {
+    var unassignedStudents = _students.where((s) => s.assignedTo == null).toList();
+    
+    // Sort by standard first, then by school
+    unassignedStudents.sort((a, b) {
+      final stdComparison = a.standard.compareTo(b.standard);
+      if (stdComparison != 0) return stdComparison;
+      return a.school.compareTo(b.school);
+    });
+    
     return Padding(
       padding: const EdgeInsets.all(24),
       child: Column(
@@ -358,12 +374,21 @@ class _AdminDashboardState extends State<AdminDashboard> {
             children: [
               const Text('Student Assignments', style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold)),
               const Spacer(),
-              ElevatedButton.icon(
-                onPressed: _showBulkAssignDialog,
-                icon: const Icon(Icons.assignment_ind, color: Colors.white),
-                label: const Text('Bulk Assign', style: TextStyle(color: Colors.white)),
-                style: ElevatedButton.styleFrom(backgroundColor: Colors.orange),
-              ),
+              if (_selectedStudentIds.isNotEmpty) ...[
+                Text('${_selectedStudentIds.length} selected', style: const TextStyle(fontWeight: FontWeight.bold)),
+                const SizedBox(width: 16),
+                ElevatedButton.icon(
+                  onPressed: _showAssignSelectedDialog,
+                  icon: const Icon(Icons.assignment_ind, color: Colors.white),
+                  label: const Text('Assign Selected', style: TextStyle(color: Colors.white)),
+                  style: ElevatedButton.styleFrom(backgroundColor: Colors.green),
+                ),
+                const SizedBox(width: 8),
+                TextButton(
+                  onPressed: () => setState(() => _selectedStudentIds.clear()),
+                  child: const Text('Clear Selection'),
+                ),
+              ],
             ],
           ),
           const SizedBox(height: 24),
@@ -393,18 +418,48 @@ class _AdminDashboardState extends State<AdminDashboard> {
                           ),
                         ),
                         Expanded(
-                          child: ListView.builder(
-                            itemCount: _students.where((s) => s.assignedTo == null).length,
-                            itemBuilder: (context, index) {
-                              final unassigned = _students.where((s) => s.assignedTo == null).toList();
-                              if (index >= unassigned.length) return const SizedBox();
-                              final student = unassigned[index];
-                              return ListTile(
-                                title: Text(student.name),
-                                subtitle: Text('${student.standard} - ${student.school}'),
-                                trailing: Text(student.mobile),
-                              );
-                            },
+                          child: Column(
+                            children: [
+                              if (unassignedStudents.isNotEmpty)
+                                CheckboxListTile(
+                                  title: const Text('Select All', style: TextStyle(fontWeight: FontWeight.bold)),
+                                  value: _selectedStudentIds.length == unassignedStudents.length,
+                                  tristate: true,
+                                  onChanged: (value) {
+                                    setState(() {
+                                      if (value == true) {
+                                        _selectedStudentIds.addAll(unassignedStudents.map((s) => s.id));
+                                      } else {
+                                        _selectedStudentIds.clear();
+                                      }
+                                    });
+                                  },
+                                ),
+                              const Divider(),
+                              Expanded(
+                                child: ListView.builder(
+                                  itemCount: unassignedStudents.length,
+                                  itemBuilder: (context, index) {
+                                    final student = unassignedStudents[index];
+                                    final isSelected = _selectedStudentIds.contains(student.id);
+                                    return CheckboxListTile(
+                                      title: Text(student.name),
+                                      subtitle: Text('Std: ${student.standard} | School: ${student.school}\nMobile: ${student.mobile}'),
+                                      value: isSelected,
+                                      onChanged: (value) {
+                                        setState(() {
+                                          if (value == true) {
+                                            _selectedStudentIds.add(student.id);
+                                          } else {
+                                            _selectedStudentIds.remove(student.id);
+                                          }
+                                        });
+                                      },
+                                    );
+                                  },
+                                ),
+                              ),
+                            ],
                           ),
                         ),
                       ],
@@ -441,14 +496,14 @@ class _AdminDashboardState extends State<AdminDashboard> {
                               final assignedCount = _students.where((s) => s.assignedTo == employee.id).length;
                               return ListTile(
                                 title: Text(employee.name),
-                                subtitle: Text('${employee.email}'),
+                                subtitle: Text('${employee.email} • ${employee.role}'),
                                 trailing: Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                                   decoration: BoxDecoration(
                                     color: assignedCount > 50 ? Colors.red : Colors.green,
                                     borderRadius: BorderRadius.circular(12),
                                   ),
-                                  child: Text('$assignedCount students', style: const TextStyle(color: Colors.white, fontSize: 12)),
+                                  child: Text('$assignedCount students', style: const TextStyle(color: Colors.white, fontSize: 10)),
                                 ),
                               );
                             },
@@ -517,9 +572,27 @@ class _AdminDashboardState extends State<AdminDashboard> {
                           child: PieChart(
                             PieChartData(
                               sections: [
-                                PieChartSectionData(value: report.convertedCalls.toDouble(), color: Colors.green, title: 'Converted'),
-                                PieChartSectionData(value: report.notLiftedCalls.toDouble(), color: Colors.red, title: 'Not Lifted'),
-                                PieChartSectionData(value: report.followUpsScheduled.toDouble(), color: Colors.orange, title: 'Follow-ups'),
+                                PieChartSectionData(
+                                  value: report.convertedCalls.toDouble(), 
+                                  color: Colors.green, 
+                                  title: 'Converted',
+                                  titleStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Color.fromARGB(255, 0, 0, 0)),
+                                  titlePositionPercentageOffset: 0.5,
+                                ),
+                                PieChartSectionData(
+                                  value: report.notLiftedCalls.toDouble(), 
+                                  color: Colors.red, 
+                                  title: 'Not Lifted',
+                                  titleStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.white),
+                                  titlePositionPercentageOffset: 0.5,
+                                ),
+                                PieChartSectionData(
+                                  value: report.followUpsScheduled.toDouble(), 
+                                  color: Colors.orange, 
+                                  title: 'Follow-ups',
+                                  titleStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.white),
+                                  titlePositionPercentageOffset: 0.5,
+                                ),
                               ],
                             ),
                           ),
@@ -681,10 +754,25 @@ class _AdminDashboardState extends State<AdminDashboard> {
             ElevatedButton(
               onPressed: () async {
                 if (nameController.text.isNotEmpty && emailController.text.isNotEmpty && passwordController.text.isNotEmpty) {
-                  await _userService.createUser(emailController.text, passwordController.text, selectedRole, nameController.text);
-                  await _loadData();
-                  Navigator.pop(context);
-                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('User created successfully')));
+                  try {
+                    // Create user
+                    await _userService.createUser(emailController.text, passwordController.text, selectedRole, nameController.text);
+                    
+                    // Create employee directly in mock list
+                    final newEmployee = Employee(
+                      id: 'emp_${DateTime.now().millisecondsSinceEpoch}',
+                      name: nameController.text,
+                      email: emailController.text,
+                      role: selectedRole,
+                    );
+                    _employees.add(newEmployee);
+                    
+                    Navigator.pop(context);
+                    await _loadData();
+                    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('User and employee created successfully')));
+                  } catch (e) {
+                    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e')));
+                  }
                 }
               },
               child: const Text('Create User'),
@@ -760,8 +848,8 @@ class _AdminDashboardState extends State<AdminDashboard> {
                   school: schoolController.text,
                   createdAt: DateTime.now(),
                 ));
-                await _loadData();
                 Navigator.pop(context);
+                await _loadData();
                 ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Student added successfully')));
               }
             },
@@ -782,9 +870,9 @@ class _AdminDashboardState extends State<AdminDashboard> {
           children: [
             Icon(Icons.upload_file, size: 64, color: Colors.blue),
             SizedBox(height: 16),
-            Text('Select Excel file with columns: Name, Standard, Mobile No., Address, School'),
+            Text('Select Excel/CSV file with columns: Name, Standard, Mobile, Address, School'),
             SizedBox(height: 8),
-            Text('Supported formats: .xlsx, .xls', style: TextStyle(fontSize: 12, color: Colors.grey)),
+            Text('Supported formats: .xlsx, .xls, .csv', style: TextStyle(fontSize: 12, color: Colors.grey)),
           ],
         ),
         actions: [
@@ -805,33 +893,34 @@ class _AdminDashboardState extends State<AdminDashboard> {
     try {
       final result = await FilePicker.platform.pickFiles(
         type: FileType.custom,
-        allowedExtensions: ['xlsx', 'xls'],
+        allowedExtensions: ['xlsx', 'xls', 'csv'],
       );
       
       if (result != null && result.files.isNotEmpty) {
-        // Mock Excel parsing - in real app would parse actual file
-        final mockStudents = [
-          Student(id: 'imp1', name: 'Imported Student 1', standard: '10th', mobile: '9876543220', address: '100 Import St', school: 'Import School', createdAt: DateTime.now()),
-          Student(id: 'imp2', name: 'Imported Student 2', standard: '9th', mobile: '9876543221', address: '101 Import Ave', school: 'Import Academy', createdAt: DateTime.now()),
-          Student(id: 'imp3', name: 'Imported Student 3', standard: '11th', mobile: '9876543222', address: '102 Import Rd', school: 'Import High', createdAt: DateTime.now()),
-        ];
-        
-        // Check for duplicates
-        final duplicates = <String>[];
-        for (final student in mockStudents) {
-          if (_students.any((s) => s.mobile == student.mobile)) {
-            duplicates.add(student.mobile);
+        final file = result.files.first;
+        if (file.bytes != null) {
+          final importedStudents = await ExcelService.parseExcelFile(file.bytes!, fileName: file.name);
+          print('Parsed ${importedStudents.length} students from ${file.name}');
+          
+          // Check for duplicates
+          final duplicates = <String>[];
+          for (final student in importedStudents) {
+            if (_students.any((s) => s.mobile == student.mobile)) {
+              duplicates.add(student.mobile);
+            }
           }
-        }
-        
-        if (duplicates.isNotEmpty) {
-          _showDuplicateDialog(duplicates, mockStudents);
-        } else {
-          _students.addAll(mockStudents);
-          await _loadData();
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('${mockStudents.length} students imported successfully')),
-          );
+          
+          if (duplicates.isNotEmpty) {
+            _showDuplicateDialog(duplicates, importedStudents);
+          } else {
+            for (final student in importedStudents) {
+              await _studentService.addStudent(student);
+            }
+            await _loadData();
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text('${importedStudents.length} students imported successfully')),
+            );
+          }
         }
       }
     } catch (e) {
@@ -857,11 +946,13 @@ class _AdminDashboardState extends State<AdminDashboard> {
         actions: [
           TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
           ElevatedButton(
-            onPressed: () {
+            onPressed: () async {
               Navigator.pop(context);
               final uniqueStudents = newStudents.where((s) => !duplicates.contains(s.mobile)).toList();
-              _students.addAll(uniqueStudents);
-              _loadData();
+              for (final student in uniqueStudents) {
+                await _studentService.addStudent(student);
+              }
+              await _loadData();
               ScaffoldMessenger.of(context).showSnackBar(
                 SnackBar(content: Text('${uniqueStudents.length} unique students imported')),
               );
@@ -873,28 +964,26 @@ class _AdminDashboardState extends State<AdminDashboard> {
     );
   }
 
-  void _showBulkAssignDialog() {
+  void _showAssignSelectedDialog() {
     String? selectedEmployee;
-    int assignCount = 50;
 
     showDialog(
       context: context,
       builder: (context) => StatefulBuilder(
         builder: (context, setDialogState) => AlertDialog(
-          title: const Text('Bulk Assign Students'),
+          title: Text('Assign ${_selectedStudentIds.length} Students'),
           content: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
+              const Text('Select employee to assign selected students:'),
+              const SizedBox(height: 16),
               DropdownButtonFormField<String>(
                 decoration: const InputDecoration(labelText: 'Select Employee', border: OutlineInputBorder()),
-                items: _employees.map((emp) => DropdownMenuItem(value: emp.id, child: Text(emp.name))).toList(),
+                items: _employees.map((emp) => DropdownMenuItem(
+                  value: emp.id, 
+                  child: Text('${emp.name} (${emp.role})')
+                )).toList(),
                 onChanged: (value) => setDialogState(() => selectedEmployee = value),
-              ),
-              const SizedBox(height: 16),
-              TextField(
-                decoration: const InputDecoration(labelText: 'Number of Students', border: OutlineInputBorder()),
-                keyboardType: TextInputType.number,
-                onChanged: (value) => assignCount = int.tryParse(value) ?? 50,
               ),
             ],
           ),
@@ -902,16 +991,68 @@ class _AdminDashboardState extends State<AdminDashboard> {
             TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
             ElevatedButton(
               onPressed: selectedEmployee != null ? () async {
-                final unassigned = _students.where((s) => s.assignedTo == null).take(assignCount).map((s) => s.id).toList();
-                await _studentService.assignStudents(unassigned, selectedEmployee!);
+                final assignedCount = _selectedStudentIds.length;
+                await _studentService.assignStudents(_selectedStudentIds.toList(), selectedEmployee!);
+                setState(() => _selectedStudentIds.clear());
                 await _loadData();
                 Navigator.pop(context);
-                ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Assigned ${unassigned.length} students')));
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text('Assigned $assignedCount students successfully')),
+                );
               } : null,
               child: const Text('Assign'),
             ),
           ],
         ),
+      ),
+    );
+  }
+
+
+
+  void _deleteEmployee(Employee employee) {
+    final assignedCount = _students.where((s) => s.assignedTo == employee.id).length;
+    
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Delete Employee'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Are you sure you want to delete ${employee.name}?'),
+            const SizedBox(height: 8),
+            if (assignedCount > 0) ...[
+              const Text('Warning:', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.red)),
+              Text('This employee has $assignedCount assigned students.'),
+              const Text('Students will become unassigned.'),
+            ],
+          ],
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
+          ElevatedButton(
+            onPressed: () async {
+              // Unassign all students from this employee
+              final studentsToUnassign = _students.where((s) => s.assignedTo == employee.id).map((s) => s.id).toList();
+              if (studentsToUnassign.isNotEmpty) {
+                await _studentService.assignStudents(studentsToUnassign, '');
+              }
+              
+              // Delete employee (mock - add actual delete method to DataService)
+              _employees.removeWhere((e) => e.id == employee.id);
+              
+              Navigator.pop(context);
+              await _loadData();
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(content: Text('${employee.name} deleted successfully')),
+              );
+            },
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+            child: const Text('Delete'),
+          ),
+        ],
       ),
     );
   }

@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import '../services/auth_service.dart';
-import 'admin_dashboard.dart';
-import 'employee_dashboard.dart';
+
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -11,27 +10,33 @@ class LoginScreen extends StatefulWidget {
 }
 
 class _LoginScreenState extends State<LoginScreen> {
+  final _nameController = TextEditingController();
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   final _authService = AuthService();
   bool _obscurePassword = true;
   bool _isLoading = false;
+  String _selectedRole = 'Employee';
 
-  Future<void> _login() async {
+  Future<void> _createEmployeeAndLogin() async {
+    if (_nameController.text.isEmpty || _emailController.text.isEmpty || _passwordController.text.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please fill all fields')),
+      );
+      return;
+    }
+
     setState(() => _isLoading = true);
     
+    // Create employee and login in one step
     final user = await _authService.signIn(
       _emailController.text.trim(),
       _passwordController.text,
     );
 
     if (user != null) {
-      final role = await _authService.getUserRole();
       if (mounted) {
-        Navigator.pushReplacementNamed(
-          context,
-          role == 'admin' ? '/admin' : '/employee',
-        );
+        Navigator.pushReplacementNamed(context, '/employee');
       }
     }
     
@@ -51,21 +56,21 @@ class _LoginScreenState extends State<LoginScreen> {
               children: [
                 const Text(
                   "CallTrackPro",
-                  style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+                  style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Colors.black),
                 ),
                 const SizedBox(height: 5),
-                Text(
-                  "Enter your credentials to login",
-                  style: TextStyle(fontSize: 14, color: Colors.grey[600]),
+                const Text(
+                  "Create employee account",
+                  style: TextStyle(fontSize: 14, color: Colors.black54),
                 ),
                 const SizedBox(height: 30),
 
-                const Text("Email", style: TextStyle(fontWeight: FontWeight.bold)),
+                const Text("Full Name", style: TextStyle(fontWeight: FontWeight.bold, color: Colors.black)),
                 const SizedBox(height: 5),
                 TextField(
-                  controller: _emailController,
+                  controller: _nameController,
                   decoration: InputDecoration(
-                    hintText: "admin@calltrack.com",
+                    hintText: "Enter full name",
                     filled: true,
                     fillColor: Colors.grey[300],
                     border: OutlineInputBorder(
@@ -76,7 +81,23 @@ class _LoginScreenState extends State<LoginScreen> {
                 ),
                 const SizedBox(height: 20),
 
-                const Text("Password", style: TextStyle(fontWeight: FontWeight.bold)),
+                const Text("Email", style: TextStyle(fontWeight: FontWeight.bold, color: Colors.black)),
+                const SizedBox(height: 5),
+                TextField(
+                  controller: _emailController,
+                  decoration: InputDecoration(
+                    hintText: "employee@company.com",
+                    filled: true,
+                    fillColor: Colors.grey[300],
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(8),
+                      borderSide: BorderSide.none,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 20),
+
+                const Text("Password", style: TextStyle(fontWeight: FontWeight.bold, color: Colors.black)),
                 const SizedBox(height: 5),
                 TextField(
                   controller: _passwordController,
@@ -95,39 +116,45 @@ class _LoginScreenState extends State<LoginScreen> {
                     ),
                   ),
                 ),
+                const SizedBox(height: 20),
+
+                const Text("Role", style: TextStyle(fontWeight: FontWeight.bold, color: Colors.black)),
+                const SizedBox(height: 5),
+                DropdownButtonFormField<String>(
+                  value: _selectedRole,
+                  decoration: InputDecoration(
+                    filled: true,
+                    fillColor: Colors.grey[300],
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(8),
+                      borderSide: BorderSide.none,
+                    ),
+                  ),
+                  items: ['Employee', 'Manager', 'Team Lead']
+                      .map((role) => DropdownMenuItem(value: role, child: Text(role)))
+                      .toList(),
+                  onChanged: (value) => setState(() => _selectedRole = value!),
+                ),
                 const SizedBox(height: 30),
 
                 SizedBox(
                   width: double.infinity,
                   height: 48,
                   child: ElevatedButton(
-                    onPressed: _isLoading ? null : _login,
+                    onPressed: _isLoading ? null : _createEmployeeAndLogin,
                     style: ElevatedButton.styleFrom(
                       backgroundColor: Colors.blue,
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                     ),
                     child: _isLoading 
                         ? const CircularProgressIndicator(color: Colors.white)
-                        : const Text("Login", style: TextStyle(color: Colors.white)),
+                        : const Text("Create Account & Login", style: TextStyle(color: Colors.white)),
                   ),
                 ),
                 const SizedBox(height: 16),
-                Row(
-                  children: [
-                    Expanded(
-                      child: OutlinedButton(
-                        onPressed: () => Navigator.pushReplacementNamed(context, '/admin'),
-                        child: const Text('Quick Admin'),
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: OutlinedButton(
-                        onPressed: () => Navigator.pushReplacementNamed(context, '/employee'),
-                        child: const Text('Quick Employee'),
-                      ),
-                    ),
-                  ],
+                OutlinedButton(
+                  onPressed: () => Navigator.pushReplacementNamed(context, '/admin'),
+                  child: const Text('Admin Access', style: TextStyle(color: Colors.black)),
                 ),
               ],
             ),

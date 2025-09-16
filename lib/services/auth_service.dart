@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import '../models/user.dart';
+import '../models/user.dart' as AppUser;
 
 class AuthService {
   static String? _currentUserToken;
@@ -13,7 +13,7 @@ class AuthService {
   }
 
   // Instance methods for compatibility
-  Future<User?> signIn(String email, String password) async {
+  Future<AppUser.User?> signIn(String email, String password) async {
     return AuthService._signIn(email, password);
   }
 
@@ -24,11 +24,11 @@ class AuthService {
   String? get currentUser => AuthService._currentUserId;
 
   // Static methods
-  static Future<User?> _signIn(String email, String password) async {
-    // Mock authentication - replace with real API call
+  static Future<AppUser.User?> _signIn(String email, String password) async {
+    // Mock authentication
     if (email == 'admin@test.com' && password == 'admin') {
       setSession('mock_token', 'admin_id', 'Admin');
-      return User(
+      return AppUser.User(
         id: 'admin_id', 
         email: email, 
         password: password, 
@@ -45,13 +45,10 @@ class AuthService {
   }
 
   static Future<void> logout(BuildContext context) async {
-    // Clear all session data
     _currentUserToken = null;
     _currentUserId = null;
     _currentUserRole = null;
-    
-    // Navigate to login screen and clear navigation stack
-    Navigator.of(context).pushNamedAndRemoveUntil('/login', (route) => false);
+    Navigator.of(context).pushNamedAndRemoveUntil('/', (route) => false);
   }
 
   static bool get isLoggedIn => _currentUserToken != null;

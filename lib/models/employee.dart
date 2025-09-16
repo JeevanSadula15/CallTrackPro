@@ -21,11 +21,26 @@ class Employee {
     'isActive': isActive,
   };
 
+  Map<String, dynamic> toMap() => {
+    'name': name,
+    'email': email,
+    'role': role,
+    'isActive': isActive,
+  };
+
   factory Employee.fromJson(Map<String, dynamic> json) => Employee(
-    id: json['id'],
-    name: json['name'],
-    email: json['email'],
-    role: json['role'],
+    id: json['_id'] ?? json['id'] ?? '',
+    name: json['name'] ?? '',
+    email: json['email'] ?? '',
+    role: json['role'] ?? '',
     isActive: json['isActive'] ?? true,
+  );
+
+  factory Employee.fromMap(Map<String, dynamic> map, String id) => Employee(
+    id: id,
+    name: map['name'],
+    email: map['email'],
+    role: map['role'],
+    isActive: map['isActive'] ?? true,
   );
 }

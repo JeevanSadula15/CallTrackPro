@@ -1,64 +1,99 @@
-import 'dart:io';
-import 'package:file_picker/file_picker.dart';
-import '../models/contact.dart';
+import 'dart:convert';
+import 'dart:typed_data';
+import 'package:excel/excel.dart';
+import '../models/student.dart';
 
 class ExcelService {
-  static Future<List<Contact>?> importContactsFromExcel() async {
-    try {
-      FilePickerResult? result = await FilePicker.platform.pickFiles(
-        type: FileType.custom,
-        allowedExtensions: ['xlsx', 'xls', 'csv'],
-      );
-
-      if (result != null) {
-        File file = File(result.files.single.path!);
-        
-        // Mock Excel parsing - in real app would use excel package
-        List<Contact> contacts = _parseExcelFile(file);
-        return contacts;
-      }
-    } catch (e) {
-      print('Error importing Excel: $e');
+  static Future<List<Student>> parseExcelFile(Uint8List bytes, {String? fileName}) async {
+    if (fileName != null && fileName.toLowerCase().endsWith('.csv')) {
+      return _parseCsvFile(bytes);
     }
-    return null;
+    return _parseExcelFile(bytes);
   }
 
-  static List<Contact> _parseExcelFile(File file) {
-    // Mock data for demonstration
-    return [
-      Contact(
-        id: '',
-        name: 'Imported Student 1',
-        phone: '+91 9876543220',
-        email: 'student1@school.com',
-        standard: '9th',
-        status: 'pending',
-        createdAt: DateTime.now(),
-      ),
-      Contact(
-        id: '',
-        name: 'Imported Student 2',
-        phone: '+91 9876543221',
-        email: 'student2@school.com',
-        standard: '10th',
-        status: 'pending',
-        createdAt: DateTime.now(),
-      ),
-      Contact(
-        id: '',
-        name: 'Imported Student 3',
-        phone: '+91 9876543222',
-        email: 'student3@school.com',
-        standard: '8th',
-        status: 'pending',
-        createdAt: DateTime.now(),
-      ),
-    ];
+  static Future<List<Student>> _parseCsvFile(Uint8List bytes) async {
+    try {
+      final csvString = utf8.decode(bytes);
+      final lines = csvString.split('\n');
+      final students = <Student>[];
+      
+      // Skip header row (index 0)
+      for (int i = 1; i < lines.length; i++) {
+        final line = lines[i].trim();
+        if (line.isEmpty) continue;
+        
+        final fields = line.split(',');
+        if (fields.length >= 5) {
+          final name = fields[0].trim();
+          final standard = fields[1].trim();
+          final mobile = fields[2].trim();
+          final address = fields[3].trim();
+          final school = fields[4].trim();
+          
+          if (name.isNotEmpty && mobile.isNotEmpty) {
+            print('Adding CSV student: $name, $mobile');
+            students.add(Student(
+              id: DateTime.now().millisecondsSinceEpoch.toString() + i.toString(),
+              name: name,
+              standard: standard,
+              mobile: mobile,
+              address: address,
+              school: school,
+              createdAt: DateTime.now(),
+            ));
+          }
+        }
+      }
+      
+      return students;
+    } catch (e) {
+      throw Exception('Error parsing CSV file: $e');
+    }
   }
 
-  static Future<void> exportContactsToExcel(List<Contact> contacts) async {
-    // Mock export functionality
-    await Future.delayed(const Duration(milliseconds: 500));
-    print('Exporting ${contacts.length} contacts to Excel...');
+  static Future<List<Student>> _parseExcelFile(Uint8List bytes) async {
+    try {
+      final excel = Excel.decodeBytes(bytes);
+      final students = <Student>[];
+      
+      for (var table in excel.tables.keys) {
+        final sheet = excel.tables[table]!;
+        
+        print('Sheet: $table, Rows: ${sheet.maxRows}, Cols: ${sheet.maxCols}');
+        
+        // Skip header row (index 0)
+        for (int i = 1; i < sheet.maxRows; i++) {
+          final row = sheet.rows[i];
+          print('Row $i: ${row.map((cell) => cell?.value).toList()}');
+          
+          if (row.isNotEmpty && row.length >= 5) {
+            final name = row[0]?.value?.toString().trim() ?? '';
+            final standard = row[1]?.value?.toString().trim() ?? '';
+            final mobile = row[2]?.value?.toString().trim() ?? '';
+            final address = row[3]?.value?.toString().trim() ?? '';
+            final school = row[4]?.value?.toString().trim() ?? '';
+            
+            print('Parsed: name=$name, mobile=$mobile');
+            
+            if (name.isNotEmpty && mobile.isNotEmpty) {
+              print('Adding student: $name, $mobile');
+              students.add(Student(
+                id: DateTime.now().millisecondsSinceEpoch.toString() + i.toString(),
+                name: name,
+                standard: standard,
+                mobile: mobile,
+                address: address,
+                school: school,
+                createdAt: DateTime.now(),
+              ));
+            }
+          }
+        }
+      }
+      
+      return students;
+    } catch (e) {
+      throw Exception('Error parsing Excel file: $e');
+    }
   }
 }
